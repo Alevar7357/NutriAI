@@ -1,0 +1,393 @@
+{
+  "name": "W3 - Dashboard de Control",
+  "nodes": [
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appCTXJqifgrH2TyQ",
+          "mode": "list",
+          "cachedResultName": "Asistente Nutricional IA - Version Avanzada",
+          "cachedResultUrl": "https://airtable.com/appCTXJqifgrH2TyQ"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblQFbFD0jjVd0mjs",
+          "mode": "list",
+          "cachedResultName": "perfil_usuario",
+          "cachedResultUrl": "https://airtable.com/appCTXJqifgrH2TyQ/tblQFbFD0jjVd0mjs"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        224,
+        -160
+      ],
+      "id": "f35eb821-eaf3-4ac9-8ce0-dc7f80977984",
+      "name": "Buscar Usuarios"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ======================================================\n// NODO: Contar usuarios\n// OBJETIVO:\n// Contar la cantidad total de perfiles de usuario\n// recuperados desde Airtable.\n// ======================================================\n\n\n// Obtiene todos los perfiles encontrados por\n// el nodo \"Buscar usuarios\".\nconst usuarios = $input.all();\n\n\n// Devuelve un único item con la cantidad total\n// de usuarios registrados.\nreturn [\n  {\n    json: {\n      usuarios_registrados: usuarios.length\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        400,
+        -160
+      ],
+      "id": "14bd1185-d3ba-48a6-9cfc-4cbd3ee46486",
+      "name": "Contar Usuarios"
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appCTXJqifgrH2TyQ",
+          "mode": "list",
+          "cachedResultName": "Asistente Nutricional IA - Version Avanzada",
+          "cachedResultUrl": "https://airtable.com/appCTXJqifgrH2TyQ"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tbl1I60kwJVtDTPny",
+          "mode": "list",
+          "cachedResultName": "comidas",
+          "cachedResultUrl": "https://airtable.com/appCTXJqifgrH2TyQ/tbl1I60kwJVtDTPny"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        224,
+        64
+      ],
+      "id": "c120f86c-2d30-4361-9c5d-f9418ec05ef0",
+      "name": "Buscar comidas Dashboard"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ======================================================\n// NODO: Calcular KPIs de comidas\n// OBJETIVO:\n// Analizar todas las comidas recuperadas desde Airtable\n// y calcular los indicadores principales del dashboard.\n// ======================================================\n\n\n// Obtiene todos los registros de comidas que llegan\n// desde el nodo \"Buscar comidas dashboard\".\nconst comidas = $input.all();\n\n\n// Cuenta la cantidad total de comidas registradas.\nconst comidasRegistradas = comidas.length;\n\n\n// Cuenta únicamente las comidas cuyo estado de\n// procesamiento sea \"Procesada\".\nconst comidasProcesadas = comidas.filter(item =>\n  item.json.fields?.estado_procesamiento === 'Procesada'\n).length;\n\n\n// Cuenta únicamente las comidas cuyo estado de\n// procesamiento sea \"Error\".\nconst comidasConError = comidas.filter(item =>\n  item.json.fields?.estado_procesamiento === 'Error'\n).length;\n\n\n// Devuelve un único item con los KPIs calculados.\n// Estos valores serán utilizados posteriormente para\n// actualizar la tabla \"dashboard_control\" en Airtable.\nreturn [\n  {\n    json: {\n      comidas_registradas: comidasRegistradas,\n      comidas_procesadas: comidasProcesadas,\n      comidas_con_error: comidasConError\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        400,
+        64
+      ],
+      "id": "64d0ea82-ce9d-432b-8180-aea12a875de9",
+      "name": "Calcular KPIs de comidas"
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appCTXJqifgrH2TyQ",
+          "mode": "list",
+          "cachedResultName": "Asistente Nutricional IA - Version Avanzada",
+          "cachedResultUrl": "https://airtable.com/appCTXJqifgrH2TyQ"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblA8ltGZ5fE3zr3K",
+          "mode": "list",
+          "cachedResultName": "logs_errores",
+          "cachedResultUrl": "https://airtable.com/appCTXJqifgrH2TyQ/tblA8ltGZ5fE3zr3K"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        224,
+        304
+      ],
+      "id": "b953a3b3-34e1-4c7b-80f1-806b3e326ad5",
+      "name": "Buscar errores pendientes"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ======================================================\n// NODO: Contar errores pendientes\n// OBJETIVO:\n// Contar únicamente los registros de logs_errores\n// cuyo estado sea \"Pendiente\".\n// Se vuelve a validar el estado aunque Airtable tenga filtro,\n// para evitar que un registro Ignorado o Resuelto afecte el KPI.\n// ======================================================\n\n\n// Obtiene todos los registros recibidos desde Airtable.\nconst errores = $input.all();\n\n\n// Filtra únicamente los errores cuyo estado sea \"Pendiente\".\nconst erroresPendientes = errores.filter(item =>\n  item.json.fields?.estado === 'Pendiente'\n);\n\n\n// Devuelve un único item con el KPI de errores pendientes.\nreturn [\n  {\n    json: {\n      errores_pendientes: erroresPendientes.length\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        416,
+        304
+      ],
+      "id": "175b4edf-05ae-4004-b29c-9ad40c470415",
+      "name": "Contar errores pendientes"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ======================================================\n// NODO: Consolidar KPIs dashboard\n// OBJETIVO:\n// Reunir en un único JSON todos los indicadores\n// calculados previamente en el workflow W3.\n// ======================================================\n\n\n// Obtiene la cantidad total de usuarios registrados\n// calculada en el nodo \"Contar Usuarios\".\nconst usuariosRegistrados =\n  $('Contar Usuarios').first().json.usuarios_registrados;\n\n\n// Obtiene los indicadores relacionados con las comidas\n// calculados en el nodo \"Calcular KPIs de comidas\".\nconst comidasRegistradas =\n  $('Calcular KPIs de comidas').first().json.comidas_registradas;\n\nconst comidasProcesadas =\n  $('Calcular KPIs de comidas').first().json.comidas_procesadas;\n\nconst comidasConError =\n  $('Calcular KPIs de comidas').first().json.comidas_con_error;\n\n\n// Obtiene la cantidad de errores que actualmente\n// permanecen en estado \"Pendiente\".\nconst erroresPendientes =\n  $('Contar errores pendientes').first().json.errores_pendientes;\n\n\n// Devuelve un único item con todos los KPIs.\n// Este resultado se utilizará para actualizar\n// el registro NutriAI de la tabla dashboard_control.\nreturn [\n  {\n    json: {\n      usuarios_registrados: usuariosRegistrados,\n      comidas_registradas: comidasRegistradas,\n      comidas_procesadas: comidasProcesadas,\n      comidas_con_error: comidasConError,\n      errores_pendientes: erroresPendientes\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        608,
+        304
+      ],
+      "id": "07a90f31-7679-4734-92bf-c613bfcc3432",
+      "name": "Consolidar KPIs dashboard"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "base": {
+          "__rl": true,
+          "value": "appCTXJqifgrH2TyQ",
+          "mode": "list",
+          "cachedResultName": "Asistente Nutricional IA - Version Avanzada",
+          "cachedResultUrl": "https://airtable.com/appCTXJqifgrH2TyQ"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tbl8aJ2NfPmTERPVN",
+          "mode": "list",
+          "cachedResultName": "dashboard_control",
+          "cachedResultUrl": "https://airtable.com/appCTXJqifgrH2TyQ/tbl8aJ2NfPmTERPVN"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "comidas_registradas": "={{ $json.comidas_registradas }}",
+            "comidas_procesadas": "={{ $json.comidas_procesadas }}",
+            "comidas_con_error": "={{ $json.comidas_con_error }}",
+            "errores_pendientes": "={{ $json.errores_pendientes }}",
+            "nombre": "NutriAI",
+            "usuarios_registrados": "={{ Number($json.usuarios_registrados) }}"
+          },
+          "matchingColumns": [
+            "nombre"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": false
+            },
+            {
+              "id": "nombre",
+              "displayName": "nombre",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "usuarios_registrados",
+              "displayName": "usuarios_registrados",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "comidas_registradas",
+              "displayName": "comidas_registradas",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "comidas_procesadas",
+              "displayName": "comidas_procesadas",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "comidas_con_error",
+              "displayName": "comidas_con_error",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "errores_pendientes",
+              "displayName": "errores_pendientes",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "tasa_errores",
+              "displayName": "tasa_errores",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        784,
+        304
+      ],
+      "id": "4f660448-d0a9-4a2d-ad3e-0405c5ef08ed",
+      "name": "Actualizar dashboard_control"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        16,
+        -160
+      ],
+      "id": "54eeaa0d-2651-42b0-aa12-16e1f768bb5f",
+      "name": "Actualizar Dashboard de control"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Buscar Usuarios": {
+      "main": [
+        [
+          {
+            "node": "Contar Usuarios",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar comidas Dashboard": {
+      "main": [
+        [
+          {
+            "node": "Calcular KPIs de comidas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Contar Usuarios": {
+      "main": [
+        [
+          {
+            "node": "Buscar comidas Dashboard",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calcular KPIs de comidas": {
+      "main": [
+        [
+          {
+            "node": "Buscar errores pendientes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar errores pendientes": {
+      "main": [
+        [
+          {
+            "node": "Contar errores pendientes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Contar errores pendientes": {
+      "main": [
+        [
+          {
+            "node": "Consolidar KPIs dashboard",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Consolidar KPIs dashboard": {
+      "main": [
+        [
+          {
+            "node": "Actualizar dashboard_control",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Actualizar Dashboard de control": {
+      "main": [
+        [
+          {
+            "node": "Buscar Usuarios",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "288a461b-f54d-4eb0-a967-9e67cd27c76a",
+  "nodeGroups": [],
+  "id": "TrX2kSMnlQg1UCaz",
+  "tags": []
+}

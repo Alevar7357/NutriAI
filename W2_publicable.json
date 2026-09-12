@@ -1,0 +1,2515 @@
+{
+  "name": "W2- Procesamiento de comida",
+  "nodes": [
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatDeepSeek",
+      "typeVersion": 1,
+      "position": [
+        304,
+        96
+      ],
+      "id": "090f2dae-48da-4366-85f5-7eca4616b26c",
+      "name": "DeepSeek Chat Model"
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\n  \"alimentos\": [\n    {\n      \"nombre\": \"huevo\",\n      \"cantidad\": 1,\n      \"unidad\": \"unidad\"\n    }\n  ]\n}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        432,
+        96
+      ],
+      "id": "daa5c8c2-c46f-4fb6-9633-1b9935c3cfb1",
+      "name": "Structured Output Parser"
+    },
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "comida_record_id"
+            },
+            {
+              "name": "usuario_record_id"
+            },
+            {
+              "name": "alimentos",
+              "type": "array"
+            },
+            {
+              "name": "chat_id"
+            },
+            {
+              "name": "comida_id"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -448,
+        192
+      ],
+      "id": "5529e635-a870-4d5e-8d67-1fffae1b5d55",
+      "name": "Recibir comida W1"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "fe51eb27-c27d-4778-aff0-76daea22942a",
+              "leftValue": "={{ $json.alimentos.some(a => a.cantidad == null || a.unidad == null) }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -80,
+        192
+      ],
+      "id": "f94d3b45-212f-4b11-9f54-f8aa42b7c508",
+      "name": "¿Faltan datos de alimentos?"
+    },
+    {
+      "parameters": {
+        "operation": "sendAndWait",
+        "chatId": "={{ $('Normalizar entrada W1').item.json.chat_id }}",
+        "message": "={{ \n'🔎 Me falta información para completar esta comida.\\n\\n' +\n$json.alimentos\n  .filter(a => a.cantidad == null || a.unidad == null)\n  .map(a => {\n    const faltantes = [];\n    if (a.cantidad == null) faltantes.push('cantidad');\n    if (a.unidad == null) faltantes.push('unidad');\n    return a.nombre + ': indicame ' + faltantes.join(' y ');\n  })\n  .join('\\n') +\n'\\n\\nPodés responder en un solo mensaje.'\n}}",
+        "responseType": "freeText",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        112,
+        -16
+      ],
+      "id": "bed74018-e1c4-4e4b-a6ed-ce098c37d12f",
+      "name": "Solicitar cantidades faltantes",
+      "webhookId": "b1e6e3b2-1ea7-4214-89b2-695b0b6c5d9c"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{\n'Información faltante que se le solicitó al usuario:\\n' +\n$('Normalizar entrada W1').item.json.alimentos\n.filter(a => a.cantidad == null || a.unidad == null)\n.map(a => {\n  const faltantes = [];\n  if (a.cantidad == null) faltantes.push('cantidad');\n  if (a.unidad == null) faltantes.push('unidad');\n\n  return a.nombre +\n    ' | falta: ' + faltantes.join(' y ') +\n    ' | cantidad actual: ' + (a.cantidad ?? 'null') +\n    ' | unidad actual: ' + (a.unidad ?? 'null');\n})\n.join('\\n') +\n'\\n\\nRespuesta del usuario:\\n' +\n$json.data.text\n}}",
+        "hasOutputParser": true,
+        "messages": {
+          "messageValues": [
+            {
+              "message": "=Actúa como un extractor y normalizador de datos faltantes de alimentos para NutriAI.\n\nTu tarea es completar la información faltante de alimentos previamente identificados utilizando la respuesta del usuario y el contexto que recibirás en el mensaje.\n\nRecibirás dos tipos de información:\n\n1. Los alimentos que tienen datos faltantes y qué campo falta en cada uno.\n2. La respuesta del usuario a la pregunta realizada.\n\nDebes utilizar ambas partes juntas para interpretar correctamente la respuesta.\n\nREGLAS\n\n1. No inventes información.\n\n2. No agregues alimentos que no aparezcan en el contexto proporcionado.\n\n3. Devuelve únicamente los alimentos para los cuales el usuario aportó información nueva.\n\n4. Por cada alimento puedes devolver:\n\nnombre\ncantidad\nunidad\n\n5. Si falta la cantidad y el usuario responde únicamente con un número, asigna ese número al alimento correspondiente siempre que el contexto permita identificarlo sin ambigüedad.\n\nEjemplo:\n\nContexto:\nhuevo | falta: cantidad | unidad actual: unidad\n\nRespuesta:\n5\n\nResultado:\nnombre = huevo\ncantidad = 5\nunidad = unidad\n\n6. Si falta la unidad y el usuario responde únicamente con una unidad, asigna esa unidad al alimento correspondiente.\n\n7. Si existe un único alimento con un único dato faltante, interpreta una respuesta breve utilizando ese contexto.\n\nEjemplo:\n\nContexto:\nqueso crema | falta: cantidad\n\nRespuesta:\n20 gramos\n\nResultado:\nnombre = queso crema\ncantidad = 20\nunidad = gramos\n\n8. Si existen varios alimentos con datos faltantes, relaciona cada parte de la respuesta con el alimento correspondiente según el nombre o el contexto.\n\nEjemplo:\n\nContexto:\nhuevo | falta: cantidad\nqueso crema | falta: cantidad\n\nRespuesta:\n2 huevos y 20 gramos de queso crema\n\nDebes devolver ambos alimentos con sus nuevos valores.\n\n9. Si el usuario proporciona únicamente un número pero existen varios alimentos posibles y no puede determinarse a cuál corresponde, no inventes la asociación.\n\n10. Si un dato ya era conocido en el contexto, puedes conservarlo en la salida.\n\nEjemplo:\n\nContexto:\nhuevo | falta: cantidad | unidad actual: unidad\n\nRespuesta:\n5\n\nPuedes devolver:\nnombre = huevo\ncantidad = 5\nunidad = unidad\n\n11. Normaliza las cantidades como números.\n\n12. Normaliza las unidades a valores simples como:\n\nunidad\ngramos\nkilogramos\nmililitros\nlitros\ntaza\nvaso\ncucharada\ncucharadita\nporción\nrebanada\n\n13. No calcules calorías.\n\n14. No calcules proteínas.\n\n15. No calcules carbohidratos.\n\n16. No calcules grasas.\n\n17. No generes recomendaciones.\n\n18. No respondas al usuario.\n\n19. No agregues explicaciones.\n\n20. Devuelve únicamente la información solicitada por el formato estructurado."
+            }
+          ]
+        },
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        304,
+        -16
+      ],
+      "id": "195aaf9f-cfce-4acb-87da-06fd4db0d450",
+      "name": "Normalizar datos faltantes comida"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "de7e160d-dc23-456c-9df2-131a2ac56daf",
+              "name": "comida_record_id",
+              "value": "={{ $('Normalizar entrada W1').item.json.comida_record_id }}",
+              "type": "string"
+            },
+            {
+              "id": "77f6b55b-be39-4b28-bf91-d20f96e8918f",
+              "name": "usuario_record_id",
+              "value": "={{ $('Normalizar entrada W1').item.json.usuario_record_id }}",
+              "type": "string"
+            },
+            {
+              "id": "cc163cdb-5a7a-454d-ba17-91cf26c1720c",
+              "name": "chat_id",
+              "value": "={{ $('Normalizar entrada W1').item.json.chat_id }}",
+              "type": "string"
+            },
+            {
+              "id": "25af8ee9-c8ad-40b0-9711-c5327a62eb50",
+              "name": "alimentos",
+              "value": "={{\n  $('Normalizar entrada W1').item.json.alimentos.map(original => {\n    const salida = $json.output;\n\n    const actualizados = Array.isArray(salida)\n      ? salida\n      : salida\n        ? [salida]\n        : [];\n\n    const actualizado = actualizados.find(\n      nuevo => nuevo.nombre === original.nombre\n    );\n\n    return {\n      nombre: original.nombre,\n      nombre_api: original.nombre_api,\n      cantidad: actualizado?.cantidad ?? original.cantidad,\n      unidad: actualizado?.unidad ?? original.unidad\n    };\n  })\n}}",
+              "type": "array"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        608,
+        -16
+      ],
+      "id": "d7303038-e91c-4680-8ae7-51a22e87f2eb",
+      "name": "Combinar alimentos"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        912,
+        208
+      ],
+      "id": "28dd251f-569c-4d50-8164-300d94f3b6ab",
+      "name": "Procesar alimentos",
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "=alimentos",
+        "include": "allOtherFields",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        736,
+        208
+      ],
+      "id": "71a1f9f7-0484-47fb-ab33-7e56116ef92d",
+      "name": "Split Out"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "d65f4182-1774-4c81-be34-9bb68ccffb08",
+              "leftValue": "={{ $json.id || '' }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "93a59387-6d95-407e-ab8c-bfaf2104c6af",
+              "leftValue": "={{ Number($json.fields?.calorias_por_porcion ?? 0) }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1248,
+        336
+      ],
+      "id": "bab341a5-3568-448d-8eeb-f6c248a3e645",
+      "name": "¿Existe?"
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appCTXJqifgrH2TyQ",
+          "mode": "list",
+          "cachedResultName": "Asistente Nutricional IA - Version Avanzada",
+          "cachedResultUrl": "https://airtable.com/appCTXJqifgrH2TyQ"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblvnNraF0BohXFBL",
+          "mode": "list",
+          "cachedResultName": "alimentos",
+          "cachedResultUrl": "https://airtable.com/appCTXJqifgrH2TyQ/tblvnNraF0BohXFBL"
+        },
+        "filterByFormula": "={{ \"{nombre} = '\" + $json.alimentos.nombre + \"'\" }}",
+        "returnAll": false,
+        "limit": 1,
+        "options": {},
+        "sort": {
+          "property": []
+        }
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        1104,
+        224
+      ],
+      "id": "1fe89e3c-617f-499b-aac5-32cbaf1ade29",
+      "name": "Buscar Alimento",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "url": "https://api.nal.usda.gov/fdc/v1/foods/search",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "api_key",
+              "value": "CONFIGURAR_CREDENCIAL"
+            },
+            {
+              "name": "query",
+              "value": "={{ $('Procesar alimentos').item.json.alimentos.nombre_api }}"
+            },
+            {
+              "name": "pageSize",
+              "value": "5"
+            },
+            {
+              "name": "dataType",
+              "value": "Foundation,SR Legacy"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        1392,
+        448
+      ],
+      "id": "35d8d972-6b7b-43b7-b902-52cef7a7d038",
+      "name": "Buscar Alimento USDA",
+      "retryOnFail": true,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "8bc70d5b-4c97-413a-ba23-334718a205fa",
+              "name": "fdc_id",
+              "value": "={{ $('Buscar Alimento USDA').item.json.foods[$json.output.indice].fdcId }}",
+              "type": "number"
+            },
+            {
+              "id": "71bc20cd-37c7-4bc4-b08f-22b4e80bfa13",
+              "name": "nombre_usda",
+              "value": "={{ $('Buscar Alimento USDA').item.json.foods[$json.output.indice].description }}",
+              "type": "string"
+            },
+            {
+              "id": "fc149aa8-cf61-4f72-83fd-aaa09fdd7e93",
+              "name": "calorias",
+              "value": "={{\n(() => {\n  // Obtiene todos los nutrientes del alimento seleccionado en USDA.\n  const nutrientes =\n    $('Buscar Alimento USDA').item.json.foods[$json.output.indice].foodNutrients ?? [];\n\n  // Busca primero el nutriente estándar de energía de USDA (nutrientId 1008).\n  const energiaPorId = nutrientes.find(\n    n => Number(n.nutrientId) === 1008\n  );\n\n  // Si no lo encuentra por ID, busca cualquier nutriente\n  // de energía expresado en KCAL.\n  const energiaPorNombre = nutrientes.find(\n    n =>\n      String(n.nutrientName ?? '').toLowerCase().includes('energy') &&\n      String(n.unitName ?? '').toUpperCase() === 'KCAL'\n  );\n\n  // Devuelve las calorías encontradas.\n  // Si USDA realmente no trae energía, devuelve null.\n  return energiaPorId?.value ?? energiaPorNombre?.value ?? null;\n})()\n}}",
+              "type": "number"
+            },
+            {
+              "id": "36352136-09b4-42a3-ad2b-501a8fecc535",
+              "name": "=proteinas",
+              "value": "={{ $('Buscar Alimento USDA').item.json.foods[$json.output.indice].foodNutrients.find(n => n.nutrientName === 'Protein')?.value ?? null }}",
+              "type": "number"
+            },
+            {
+              "id": "331715e9-620a-4137-a49a-375137aab94f",
+              "name": "carbohidratos",
+              "value": "={{ $('Buscar Alimento USDA').item.json.foods[$json.output.indice].foodNutrients.find(n => n.nutrientName === 'Carbohydrate, by difference')?.value ?? null }}",
+              "type": "number"
+            },
+            {
+              "id": "de90963e-e053-4a1f-8274-39fefdb6efa0",
+              "name": "grasas",
+              "value": "={{ $('Buscar Alimento USDA').item.json.foods[$json.output.indice].foodNutrients.find(n => n.nutrientName === 'Total lipid (fat)')?.value ?? null }}",
+              "type": "number"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        2176,
+        432
+      ],
+      "id": "9b3436b4-ece7-478e-aace-ad2d1a7d47f1",
+      "name": "Normalizar datos USDA "
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "value": "appCTXJqifgrH2TyQ",
+          "mode": "list",
+          "cachedResultName": "Asistente Nutricional IA - Version Avanzada",
+          "cachedResultUrl": "https://airtable.com/appCTXJqifgrH2TyQ"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblvnNraF0BohXFBL",
+          "mode": "list",
+          "cachedResultName": "alimentos",
+          "cachedResultUrl": "https://airtable.com/appCTXJqifgrH2TyQ/tblvnNraF0BohXFBL"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "porcion_default": 100,
+            "calorias_por_porcion": "={{ $json.calorias }}",
+            "proteinas_por_porcion": "={{ $json.proteinas }}",
+            "carbohidratos_por_porcion": "={{ $json.carbohidratos }}",
+            "grasas_por_porcion": "={{ $json.grasas }}",
+            "id": "={{ 'alimento-' + $execution.id + '-' + $('Procesar alimentos').item.json.alimentos.nombre_api.replace(/\\s+/g, '-') }}",
+            "nombre": "={{ $('Procesar alimentos').item.json.alimentos.nombre }}",
+            "unidad_porcion": "gramos",
+            "fecha_actualizacion": "={{ $now.toFormat('yyyy-MM-dd') }}",
+            "fecha_creacion": "={{ $now.toFormat('yyyy-MM-dd') }}",
+            "fibra_por_porcion": 0
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "nombre",
+              "displayName": "nombre",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "marca",
+              "displayName": "marca",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "foto",
+              "displayName": "foto",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "array",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "porcion_default",
+              "displayName": "porcion_default",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "unidad_porcion",
+              "displayName": "unidad_porcion",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "calorias_por_porcion",
+              "displayName": "calorias_por_porcion",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "proteinas_por_porcion",
+              "displayName": "proteinas_por_porcion",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "carbohidratos_por_porcion",
+              "displayName": "carbohidratos_por_porcion",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "grasas_por_porcion",
+              "displayName": "grasas_por_porcion",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "fecha_creacion",
+              "displayName": "fecha_creacion",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "fecha_actualizacion",
+              "displayName": "fecha_actualizacion",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "tipo_alimento",
+              "displayName": "tipo_alimento",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "natural",
+                  "value": "natural"
+                },
+                {
+                  "name": "procesado",
+                  "value": "procesado"
+                },
+                {
+                  "name": "ultraprocesado",
+                  "value": "ultraprocesado"
+                },
+                {
+                  "name": "casero",
+                  "value": "casero"
+                },
+                {
+                  "name": "industrial",
+                  "value": "industrial"
+                }
+              ],
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "detalle_comidas_count",
+              "displayName": "detalle_comidas_count",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "detalle_comidas",
+              "displayName": "detalle_comidas",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "array",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "calorias_totales_consumidas",
+              "displayName": "calorias_totales_consumidas",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "proteinas_totales_consumidas",
+              "displayName": "proteinas_totales_consumidas",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "carbohidratos_totales_consumidos",
+              "displayName": "carbohidratos_totales_consumidos",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "grasas_totales_consumidas",
+              "displayName": "grasas_totales_consumidas",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "unidad_porcion_id",
+              "displayName": "unidad_porcion_id",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "array",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "fibra_por_porcion",
+              "displayName": "fibra_por_porcion",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        2352,
+        432
+      ],
+      "id": "4158da6b-f4f5-4193-8505-15efb542a765",
+      "name": "Registrar alimento"
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "value": "appCTXJqifgrH2TyQ",
+          "mode": "list",
+          "cachedResultName": "Asistente Nutricional IA - Version Avanzada",
+          "cachedResultUrl": "https://airtable.com/appCTXJqifgrH2TyQ"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tbl6CWs6KypVmyHWT",
+          "mode": "list",
+          "cachedResultName": "detalle_comidas",
+          "cachedResultUrl": "https://airtable.com/appCTXJqifgrH2TyQ/tbl6CWs6KypVmyHWT"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "cantidad": "={{ $json.gramos_consumidos }}",
+            "id": "={{ 'detalle-' + $execution.id + '-' + $('Procesar alimentos').item.json.alimentos.nombre_api.replace(/\\s+/g, '-') }}",
+            "comida": "={{ [ $('Normalizar entrada W1').item.json.comida_record_id ] }}",
+            "alimento": "={{ [ $json.alimento_record_id ] }}",
+            "fecha_creacion": "={{ $now.toFormat('yyyy-MM-dd') }}",
+            "fecha_actualizacion": "={{ $now.toFormat('yyyy-MM-dd') }}",
+            "unidad": "gramos"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "comida",
+              "displayName": "comida",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "array",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "alimento",
+              "displayName": "alimento",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "array",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "cantidad",
+              "displayName": "cantidad",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "unidad",
+              "displayName": "unidad",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "calorias",
+              "displayName": "calorias",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "proteinas",
+              "displayName": "proteinas",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "carbohidratos",
+              "displayName": "carbohidratos",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "grasas",
+              "displayName": "grasas",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "foto_alimento",
+              "displayName": "foto_alimento",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "array",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "fecha_creacion",
+              "displayName": "fecha_creacion",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "fecha_actualizacion",
+              "displayName": "fecha_actualizacion",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "nombre_alimento",
+              "displayName": "nombre_alimento",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "marca_alimento",
+              "displayName": "marca_alimento",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "porcion_default",
+              "displayName": "porcion_default",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "calorias_por_porcion",
+              "displayName": "calorias_por_porcion",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "proteinas_por_porcion",
+              "displayName": "proteinas_por_porcion",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "carbohidratos_por_porcion",
+              "displayName": "carbohidratos_por_porcion",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "grasas_por_porcion",
+              "displayName": "grasas_por_porcion",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "calorias_totales",
+              "displayName": "calorias_totales",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "proteinas_totales",
+              "displayName": "proteinas_totales",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "carbohidratos_totales",
+              "displayName": "carbohidratos_totales",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "grasas_totales",
+              "displayName": "grasas_totales",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "recomendaciones_ia",
+              "displayName": "recomendaciones_ia",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "array",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "objetivos_nutricionales",
+              "displayName": "objetivos_nutricionales",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "array",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "unidad_id",
+              "displayName": "unidad_id",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "array",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "calorias_calculadas",
+              "displayName": "calorias_calculadas",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "proteinas_calculadas",
+              "displayName": "proteinas_calculadas",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "carbohidratos_calculados",
+              "displayName": "carbohidratos_calculados",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "grasas_calculadas",
+              "displayName": "grasas_calculadas",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        2832,
+        688
+      ],
+      "id": "57927432-07dd-4fd1-967a-0a44333326f1",
+      "name": "crear detalle_comida"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "f43af8e8-a5d9-4e1e-8554-9ba634ce14a9",
+              "name": "alimento_record_id",
+              "value": "={{ $json.id }}",
+              "type": "string"
+            },
+            {
+              "id": "384cae7d-336e-4998-841a-35b7f1490b15",
+              "name": "nombre",
+              "value": "={{ $json.fields.nombre }}",
+              "type": "string"
+            },
+            {
+              "id": "38869fad-ff5d-43b2-92ef-fb87f1e1a075",
+              "name": "porcion_default",
+              "value": "={{ $json.fields.porcion_default }}",
+              "type": "number"
+            },
+            {
+              "id": "58281325-82aa-4da4-ad2d-71840055af69",
+              "name": "proteinas_por_porcion",
+              "value": "={{ $json.fields.proteinas_por_porcion }}",
+              "type": "number"
+            },
+            {
+              "id": "4a78e33c-7cc5-49a5-a62c-8830436cd1c5",
+              "name": "carbohidratos_por_porcion",
+              "value": "={{ $json.fields.carbohidratos_por_porcion }}",
+              "type": "number"
+            },
+            {
+              "id": "0171582c-cfdd-49e4-afe3-88b7d104575f",
+              "name": "grasas_por_porcion",
+              "value": "={{ $json.fields.grasas_por_porcion }}",
+              "type": "number"
+            },
+            {
+              "id": "b596ca2b-7e49-4fed-9863-e8862adae9e7",
+              "name": "calorias_por_porcion",
+              "value": "={{ $json.fields.calorias_por_porcion }}",
+              "type": "number"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        2512,
+        320
+      ],
+      "id": "7dd304bc-f148-4feb-a0fb-dfb8fc38ef38",
+      "name": "Normalizar alimento seleccionado"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "8e3e95f3-4302-44f3-8d5c-4a5dae09d65c",
+              "name": "gramos_consumidos",
+              "value": "={{\n  $('Procesar alimentos').item.json.alimentos.unidad === 'gramos'\n    ? $('Procesar alimentos').item.json.alimentos.cantidad\n    : $('Procesar alimentos').item.json.alimentos.unidad === 'unidad'\n      ? (\n          $('Procesar alimentos').item.json.alimentos.nombre === 'huevo'\n            ? $('Procesar alimentos').item.json.alimentos.cantidad * 50\n            : $('Procesar alimentos').item.json.alimentos.nombre === 'tostada'\n              ? $('Procesar alimentos').item.json.alimentos.cantidad * 30\n              : $('Procesar alimentos').item.json.alimentos.nombre === 'durazno'\n                ? $('Procesar alimentos').item.json.alimentos.cantidad * 150\n                : $('Procesar alimentos').item.json.alimentos.cantidad * 100\n        )\n      : $('Procesar alimentos').item.json.alimentos.unidad === 'taza'\n        ? $('Procesar alimentos').item.json.alimentos.cantidad * 240\n        : $('Procesar alimentos').item.json.alimentos.cantidad * 100\n}}",
+              "type": "number"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        2688,
+        320
+      ],
+      "id": "e54afb7b-e427-4ca1-a093-083eb7eaa822",
+      "name": "Calcular gramos consumidos"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "33babdb9-01e0-4719-952d-b9ec5e61b3b3",
+              "name": "=comida_record_id",
+              "value": "={{ $json.comida_record_id }}",
+              "type": "string"
+            },
+            {
+              "id": "6fae5b14-dca8-4fcc-97d8-67fcf45c68ad",
+              "name": "usuario_record_id",
+              "value": "={{ $json.usuario_record_id }}",
+              "type": "string"
+            },
+            {
+              "id": "ddaef80b-7701-45ff-b329-a0ee2146f19d",
+              "name": "alimentos",
+              "value": "={{ $json.alimentos }}",
+              "type": "array"
+            },
+            {
+              "id": "a924a047-95f2-49c4-9783-f6378e3137cf",
+              "name": "chat_id",
+              "value": "={{ $json.chat_id }}",
+              "type": "string"
+            },
+            {
+              "id": "f2ee2cc9-5b14-4dc2-ac19-2a0abf38af65",
+              "name": "comida_id",
+              "value": "={{ $json.comida_id }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        -256,
+        192
+      ],
+      "id": "480cfeb7-55df-44d7-a528-c8fcf322a348",
+      "name": "Normalizar entrada W1"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatDeepSeek",
+      "typeVersion": 1,
+      "position": [
+        1888,
+        528
+      ],
+      "id": "ea8bccd0-a097-4020-a4db-b60e04c59149",
+      "name": "DeepSeek Chat Model1"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{\n'Alimento original: ' + $('Procesar alimentos').item.json.alimentos.nombre +\n'\\nTérmino de búsqueda USDA: ' + $('Procesar alimentos').item.json.alimentos.nombre_api +\n'\\n\\nCandidatos USDA:\\n' +\n$json.foods.map((f, i) =>\n  i + ' - ' + f.description\n).join('\\n')\n}}",
+        "hasOutputParser": true,
+        "messages": {
+          "messageValues": [
+            {
+              "message": "=Actúa como selector de coincidencias de USDA FoodData Central.\n\nRecibirás:\n- el nombre original del alimento en español\n- el término de búsqueda utilizado en USDA\n- una lista de candidatos reales devueltos por USDA FoodData Central\n\nTu única tarea es seleccionar cuál de los candidatos representa mejor el alimento solicitado.\n\nREGLAS\n\n1. Debes elegir exclusivamente uno de los candidatos recibidos.\n2. No inventes alimentos.\n3. No modifiques los nombres de los candidatos.\n\n4. La prioridad absoluta es que el candidato corresponda al MISMO ALIMENTO solicitado.\n   Primero identifica el alimento principal y descarta candidatos que correspondan a otro alimento diferente.\n\n5. Nunca selecciones un candidato solamente porque coincidan palabras secundarias como:\n   raw, green, red, fresh, cooked, boiled, fried o grilled.\n\n6. Ejemplo:\n   Si el alimento solicitado es \"manzana verde\", un candidato de \"apple\" debe tener prioridad sobre cualquier candidato de \"cauliflower\", \"grape\", \"pear\" u otro alimento, aunque estos contengan palabras como \"green\" o \"raw\".\n\n7. Una vez identificado el mismo alimento, prioriza la coincidencia con la variedad indicada por el usuario, si existe.\n\n8. Después prioriza la preparación indicada por el usuario.\n\n9. Evita candidatos que agreguen ingredientes, sabores o preparaciones no mencionadas.\n\n10. Para alimentos simples, prioriza la versión genérica del alimento sobre productos especiales o industrializados.\n\n11. Para frutas y vegetales frescos, prioriza versiones raw cuando corresponda.\n\n12. Para café o té sin agregados, prioriza versiones brewed sin leche, azúcar u otros ingredientes.\n\n13. Si el usuario indicó una preparación como fried, boiled, grilled o cooked, prioriza candidatos que conserven esa preparación.\n\n14. No selecciones un candidato únicamente porque aparece primero en la lista.\n\n15. Antes de responder, verifica:\n   - ¿Es el mismo alimento?\n   - ¿Coincide la variedad si fue indicada?\n   - ¿Coincide la preparación?\n   - ¿Evita ingredientes adicionales?\n\n16. Devuelve exclusivamente el índice numérico del mejor candidato en el formato solicitado.\n\nEjemplo:\n{\n  \"indice\": 2\n}"
+            }
+          ]
+        },
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        1888,
+        432
+      ],
+      "id": "92100d6d-6ea9-49a9-b600-06756c969c6e",
+      "name": "Seleccionar mejor resultado USDA"
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\n  \"type\": \"object\",\n  \"properties\": {\n    \"indice\": {\n      \"type\": \"integer\"\n    }\n  },\n  \"required\": [\"indice\"],\n  \"additionalProperties\": false\n}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        2032,
+        528
+      ],
+      "id": "4e1c6d36-8374-419f-801b-d2605c7dc497",
+      "name": "Structured Output Parser1"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "base": {
+          "__rl": true,
+          "value": "appCTXJqifgrH2TyQ",
+          "mode": "list",
+          "cachedResultName": "Asistente Nutricional IA - Version Avanzada",
+          "cachedResultUrl": "https://airtable.com/appCTXJqifgrH2TyQ"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tbl1I60kwJVtDTPny",
+          "mode": "list",
+          "cachedResultName": "comidas",
+          "cachedResultUrl": "https://airtable.com/appCTXJqifgrH2TyQ/tbl1I60kwJVtDTPny"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "id": "={{ $('Normalizar entrada W1').item.json.comida_record_id }}",
+            "fecha_actualizacion": "={{ $now.toFormat('yyyy-MM-dd') }}",
+            "estado_procesamiento": "Procesada"
+          },
+          "matchingColumns": [
+            "id"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": false
+            },
+            {
+              "id": "usuario",
+              "displayName": "usuario",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "array",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "fecha_comida",
+              "displayName": "fecha_comida",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "tipo_comida",
+              "displayName": "tipo_comida",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "desayuno",
+                  "value": "desayuno"
+                },
+                {
+                  "name": "almuerzo",
+                  "value": "almuerzo"
+                },
+                {
+                  "name": "cena",
+                  "value": "cena"
+                },
+                {
+                  "name": "merienda",
+                  "value": "merienda"
+                },
+                {
+                  "name": "snack",
+                  "value": "snack"
+                }
+              ],
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "foto_comida",
+              "displayName": "foto_comida",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "array",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "fecha_creacion",
+              "displayName": "fecha_creacion",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "fecha_actualizacion",
+              "displayName": "fecha_actualizacion",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "detalle_comidas_count",
+              "displayName": "detalle_comidas_count",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "detalle_comidas",
+              "displayName": "detalle_comidas",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "array",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "total_calorias",
+              "displayName": "total_calorias",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "total_proteinas",
+              "displayName": "total_proteinas",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "total_carbohidratos",
+              "displayName": "total_carbohidratos",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "total_grasas",
+              "displayName": "total_grasas",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "descripcion_comida",
+              "displayName": "descripcion_comida",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "recomendacion_ia_comida",
+              "displayName": "recomendacion_ia_comida",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "imagenes_comidas",
+              "displayName": "imagenes_comidas",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "array",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "estado_procesamiento",
+              "displayName": "estado_procesamiento",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "Procesando",
+                  "value": "Procesando"
+                },
+                {
+                  "name": "Procesada",
+                  "value": "Procesada"
+                },
+                {
+                  "name": "Error",
+                  "value": "Error"
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        1408,
+        80
+      ],
+      "id": "f9a662c8-14c7-4542-bb88-47695fbb51b5",
+      "name": "Modificar comida",
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appCTXJqifgrH2TyQ",
+          "mode": "list",
+          "cachedResultName": "Asistente Nutricional IA - Version Avanzada",
+          "cachedResultUrl": "https://airtable.com/appCTXJqifgrH2TyQ"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tbl1I60kwJVtDTPny",
+          "mode": "list",
+          "cachedResultName": "comidas",
+          "cachedResultUrl": "https://airtable.com/appCTXJqifgrH2TyQ/tbl1I60kwJVtDTPny"
+        },
+        "filterByFormula": "={{ \"RECORD_ID() = '\" + $('Normalizar entrada W1').item.json.comida_record_id + \"'\" }}",
+        "returnAll": false,
+        "limit": 1,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        1552,
+        80
+      ],
+      "id": "79f5982e-7d86-45ac-8d84-2824d9121112",
+      "name": "Buscar comida"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Normalizar entrada W1').item.json.chat_id }}",
+        "text": "=✅ Comida registrada\n\n🍽️ {{ $json.fields.descripcion_comida }}\n\n🔥 Calorías: {{ Number($json.fields.total_calorias).toFixed(0) }} kcal\n💪 Proteínas: {{ Number($json.fields.total_proteinas).toFixed(1) }} g\n🍞 Carbohidratos: {{ Number($json.fields.total_carbohidratos).toFixed(1) }} g\n🥑 Grasas: {{ Number($json.fields.total_grasas).toFixed(1) }} g",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1696,
+        80
+      ],
+      "id": "57fb9f85-e6b0-4ffd-be8f-27785179ab8c",
+      "name": "Registro exitoso",
+      "webhookId": "9ede1b99-474a-4fe0-893e-558a83f751a7"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "ee6ef2f2-904f-46f6-ab63-63eeec63dd18",
+              "name": "origen_error",
+              "value": "USDA API",
+              "type": "string"
+            },
+            {
+              "id": "409207de-16ac-4331-832b-b2778bb4e77a",
+              "name": "fecha_error",
+              "value": "={{ $now.toFormat('yyyy-MM-dd HH:mm:ss') }}",
+              "type": "string"
+            },
+            {
+              "id": "b12bc318-66a2-4f70-a926-118a2863ab6e",
+              "name": "=alimento_solicitado",
+              "value": "={{ $('Procesar alimentos').item.json.alimentos.nombre_api }}",
+              "type": "string"
+            },
+            {
+              "id": "c43ff686-c1b9-4c27-9146-6ea1d493a712",
+              "name": "mensaje_error",
+              "value": "={{ $json.details.message }}",
+              "type": "string"
+            },
+            {
+              "id": "805c2536-683c-457d-a91c-11065a06838b",
+              "name": "codigo_error",
+              "value": "={{ $json.details.httpCode }}",
+              "type": "string"
+            },
+            {
+              "id": "d5fc8fa7-52cf-450d-8737-cd1d433f5e12",
+              "name": "ejecucion_id",
+              "value": "={{ $execution.id }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        1536,
+        672
+      ],
+      "id": "d8515096-bedc-4e0f-a809-ad1959dced14",
+      "name": "Error USDA"
+    },
+    {
+      "parameters": {
+        "content": "https://api.nal.usda.gov/fdc/v1/foods/search"
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        912,
+        480
+      ],
+      "typeVersion": 1,
+      "id": "c272796a-edcd-48c8-b282-f1fbfe6c512f",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "value": "appCTXJqifgrH2TyQ",
+          "mode": "list",
+          "cachedResultName": "Asistente Nutricional IA - Version Avanzada",
+          "cachedResultUrl": "https://airtable.com/appCTXJqifgrH2TyQ"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblA8ltGZ5fE3zr3K",
+          "mode": "list",
+          "cachedResultName": "logs_errores",
+          "cachedResultUrl": "https://airtable.com/appCTXJqifgrH2TyQ/tblA8ltGZ5fE3zr3K"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "fecha_error": "={{ $now.toFormat('yyyy-MM-dd') }}",
+            "workflow": "=W2 - Procesamiento de comidas",
+            "nodo": "Buscar Alimento USDA",
+            "tipo_error": "Error API externa",
+            "mensaje_error": "={{ $json.mensaje_error }}",
+            "registro_relacionado": "={{ $json.alimento_solicitado }}",
+            "estado": "Pendiente",
+            "id": "={{ 'error-' + $execution.id }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "fecha_error",
+              "displayName": "fecha_error",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "workflow",
+              "displayName": "workflow",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "nodo",
+              "displayName": "nodo",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "tipo_error",
+              "displayName": "tipo_error",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "IA",
+                  "value": "IA"
+                },
+                {
+                  "name": "Error API externa",
+                  "value": "Error API externa"
+                },
+                {
+                  "name": "Airtable",
+                  "value": "Airtable"
+                },
+                {
+                  "name": "Validación",
+                  "value": "Validación"
+                },
+                {
+                  "name": "Slack",
+                  "value": "Slack"
+                },
+                {
+                  "name": "Telegram",
+                  "value": "Telegram"
+                },
+                {
+                  "name": "Otro",
+                  "value": "Otro"
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "mensaje_error",
+              "displayName": "mensaje_error",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "usuario",
+              "displayName": "usuario",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "array",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "registro_relacionado",
+              "displayName": "registro_relacionado",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "estado",
+              "displayName": "estado",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "Pendiente",
+                  "value": "Pendiente"
+                },
+                {
+                  "name": "Resuelto",
+                  "value": "Resuelto"
+                },
+                {
+                  "name": "Ignorado",
+                  "value": "Ignorado"
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "fecha_resolucion",
+              "displayName": "fecha_resolucion",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        1696,
+        672
+      ],
+      "id": "2a3edcce-7810-4959-87d1-7379e9c90f8a",
+      "name": "Registrar Errores"
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appCTXJqifgrH2TyQ",
+          "mode": "list",
+          "cachedResultName": "Asistente Nutricional IA - Version Avanzada",
+          "cachedResultUrl": "https://airtable.com/appCTXJqifgrH2TyQ"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tbl1I60kwJVtDTPny",
+          "mode": "list",
+          "cachedResultName": "comidas",
+          "cachedResultUrl": "https://airtable.com/appCTXJqifgrH2TyQ/tbl1I60kwJVtDTPny"
+        },
+        "filterByFormula": "={{ \"RECORD_ID() = '\" + $('Normalizar entrada W1').item.json.comida_record_id + \"'\" }}",
+        "returnAll": false,
+        "limit": 1,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        1040,
+        -16
+      ],
+      "id": "d459b8c2-3c99-4b4c-a7ac-1a79ce8a7baf",
+      "name": "Buscar estado comida"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "86fe8550-cb71-49f4-bcaa-28169c2b4603",
+              "leftValue": "={{ $json.fields.estado_procesamiento }}",
+              "rightValue": "=Error",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1216,
+        -16
+      ],
+      "id": "f2a616a0-a6a9-429e-b03c-1432ebec4d51",
+      "name": "¿Comida tiene error? "
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "base": {
+          "__rl": true,
+          "value": "appCTXJqifgrH2TyQ",
+          "mode": "list",
+          "cachedResultName": "Asistente Nutricional IA - Version Avanzada",
+          "cachedResultUrl": "https://airtable.com/appCTXJqifgrH2TyQ"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tbl1I60kwJVtDTPny",
+          "mode": "list",
+          "cachedResultName": "comidas",
+          "cachedResultUrl": "https://airtable.com/appCTXJqifgrH2TyQ/tbl1I60kwJVtDTPny"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "id": "={{ $('Normalizar entrada W1').item.json.comida_record_id }}",
+            "estado_procesamiento": "Error",
+            "fecha_actualizacion": "={{ $now.toFormat('yyyy-MM-dd') }}"
+          },
+          "matchingColumns": [
+            "id"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": false
+            },
+            {
+              "id": "usuario",
+              "displayName": "usuario",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "array",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "fecha_comida",
+              "displayName": "fecha_comida",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "tipo_comida",
+              "displayName": "tipo_comida",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "desayuno",
+                  "value": "desayuno"
+                },
+                {
+                  "name": "almuerzo",
+                  "value": "almuerzo"
+                },
+                {
+                  "name": "cena",
+                  "value": "cena"
+                },
+                {
+                  "name": "merienda",
+                  "value": "merienda"
+                },
+                {
+                  "name": "snack",
+                  "value": "snack"
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "foto_comida",
+              "displayName": "foto_comida",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "array",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "fecha_creacion",
+              "displayName": "fecha_creacion",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "fecha_actualizacion",
+              "displayName": "fecha_actualizacion",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "detalle_comidas_count",
+              "displayName": "detalle_comidas_count",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "detalle_comidas",
+              "displayName": "detalle_comidas",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "array",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "total_calorias",
+              "displayName": "total_calorias",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "total_proteinas",
+              "displayName": "total_proteinas",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "total_carbohidratos",
+              "displayName": "total_carbohidratos",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "total_grasas",
+              "displayName": "total_grasas",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "descripcion_comida",
+              "displayName": "descripcion_comida",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "recomendacion_ia_comida",
+              "displayName": "recomendacion_ia_comida",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "imagenes_comidas",
+              "displayName": "imagenes_comidas",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "array",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "estado_procesamiento",
+              "displayName": "estado_procesamiento",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "Procesando",
+                  "value": "Procesando"
+                },
+                {
+                  "name": "Procesada",
+                  "value": "Procesada"
+                },
+                {
+                  "name": "Error",
+                  "value": "Error"
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        1856,
+        672
+      ],
+      "id": "5b1a5857-f371-4e3e-adec-3c05c09c8720",
+      "name": "Cambiar estado comida"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Normalizar entrada W1').item.json.chat_id }}",
+        "text": "={{\n'⚠️ No pude procesar correctamente uno de los alimentos de tu comida.\\n\\n' +\n\n'🍽️ Alimento con problema: ' + $('Procesar alimentos').item.json.alimentos.nombre + '\\n\\n' +\n\n'La consulta nutricional externa falló, por lo que esta comida no fue procesada correctamente.\\n\\n' +\n\n'🔄 Intentá registrarla nuevamente en unos minutos.'\n}}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2032,
+        672
+      ],
+      "id": "4b69f271-d82c-436d-9687-d0e7fd985989",
+      "name": "Mensaje de error al usuario",
+      "webhookId": "6e559495-e198-4de4-9d24-b312039b4486"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "DeepSeek Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Normalizar datos faltantes comida",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Normalizar datos faltantes comida",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Recibir comida W1": {
+      "main": [
+        [
+          {
+            "node": "Normalizar entrada W1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Faltan datos de alimentos?": {
+      "main": [
+        [
+          {
+            "node": "Solicitar cantidades faltantes",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Split Out",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Solicitar cantidades faltantes": {
+      "main": [
+        [
+          {
+            "node": "Normalizar datos faltantes comida",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalizar datos faltantes comida": {
+      "main": [
+        [
+          {
+            "node": "Combinar alimentos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Combinar alimentos": {
+      "main": [
+        [
+          {
+            "node": "Split Out",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Procesar alimentos": {
+      "main": [
+        [
+          {
+            "node": "Buscar estado comida",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Buscar Alimento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Out": {
+      "main": [
+        [
+          {
+            "node": "Procesar alimentos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Existe?": {
+      "main": [
+        [
+          {
+            "node": "Normalizar alimento seleccionado",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Buscar Alimento USDA",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar Alimento": {
+      "main": [
+        [
+          {
+            "node": "¿Existe?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar Alimento USDA": {
+      "main": [
+        [
+          {
+            "node": "Seleccionar mejor resultado USDA",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Error USDA",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalizar datos USDA ": {
+      "main": [
+        [
+          {
+            "node": "Registrar alimento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Registrar alimento": {
+      "main": [
+        [
+          {
+            "node": "Normalizar alimento seleccionado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "crear detalle_comida": {
+      "main": [
+        [
+          {
+            "node": "Procesar alimentos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalizar alimento seleccionado": {
+      "main": [
+        [
+          {
+            "node": "Calcular gramos consumidos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calcular gramos consumidos": {
+      "main": [
+        [
+          {
+            "node": "crear detalle_comida",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalizar entrada W1": {
+      "main": [
+        [
+          {
+            "node": "¿Faltan datos de alimentos?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DeepSeek Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Seleccionar mejor resultado USDA",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Seleccionar mejor resultado USDA": {
+      "main": [
+        [
+          {
+            "node": "Normalizar datos USDA ",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser1": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Seleccionar mejor resultado USDA",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Modificar comida": {
+      "main": [
+        [
+          {
+            "node": "Buscar comida",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar comida": {
+      "main": [
+        [
+          {
+            "node": "Registro exitoso",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error USDA": {
+      "main": [
+        [
+          {
+            "node": "Registrar Errores",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Registrar Errores": {
+      "main": [
+        [
+          {
+            "node": "Cambiar estado comida",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar estado comida": {
+      "main": [
+        [
+          {
+            "node": "¿Comida tiene error? ",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Comida tiene error? ": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Modificar comida",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cambiar estado comida": {
+      "main": [
+        [
+          {
+            "node": "Mensaje de error al usuario",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "cbbe005f-83cb-4e7f-adfb-acd8960a3195",
+  "nodeGroups": [],
+  "id": "Um6FclhFozizWZg7",
+  "tags": []
+}
