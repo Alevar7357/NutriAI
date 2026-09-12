@@ -1,0 +1,7 @@
+Base de datos — solo lectura:
+Abrir base NutriAI
+https://airtable.com/appCTXJqifgrH2TyQ/shr384ega8avGE5Rz
+
+Dashboard Control — vista pública:
+Abrir Dashboard NutriAI
+https://airtable.com/appCTXJqifgrH2TyQ/shrV1aDmggjxVHfML
