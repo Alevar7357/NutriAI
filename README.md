@@ -47,3 +47,7 @@ Los datos incompletos generan una solicitud de corrección. Los fallos técnicos
 ## Alcance
 
 NutriAI es un MVP educativo. Los resultados nutricionales son estimaciones y presentan las limitaciones descritas en el informe; no sustituyen una evaluación profesional.
+
+## Video de demostración
+
+[Ver demo de NutriAI](https://drive.google.com/file/d/1oR6YKx_W8jHfb8i4yp8jTu69i8HPpbSJ/view?usp=sharing)
